@@ -27,10 +27,49 @@ async function create(req, res) {
   }
 }
 
+const USER_SORT_FIELDS = ["createdAt", "username", "fullname"];
+const POSITIVE_INT = /^[1-9]\d*$/;
+
 async function list(req, res) {
+  const {
+    page = "1",
+    limit = "10",
+    sortBy = "createdAt",
+    order = "desc",
+    isPrivate,
+    search,
+  } = req.query;
+
+  if (!POSITIVE_INT.test(page) || !POSITIVE_INT.test(limit)) {
+    return res
+      .status(400)
+      .json({ error: "page and limit must be positive integers" });
+  }
+
+  if (!USER_SORT_FIELDS.includes(sortBy)) {
+    return res.status(400).json({
+      error: `sortBy must be one of: ${USER_SORT_FIELDS.join(", ")}`,
+    });
+  }
+
+  if (order !== "asc" && order !== "desc") {
+    return res.status(400).json({ error: "order must be asc or desc" });
+  }
+
+  if (isPrivate !== undefined && isPrivate !== "true" && isPrivate !== "false") {
+    return res.status(400).json({ error: "isPrivate must be true or false" });
+  }
+
   try {
-    const users = await listUsers();
-    res.status(200).json(users);
+    const result = await listUsers({
+      page: Number(page),
+      limit: Math.min(Number(limit), 50),
+      sortBy,
+      order,
+      isPrivate: isPrivate === undefined ? undefined : isPrivate === "true",
+      search,
+    });
+    res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ error: "Something went wrong" });
   }

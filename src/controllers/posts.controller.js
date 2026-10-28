@@ -22,10 +22,59 @@ async function create(req, res) {
   }
 }
 
+const POST_SORT_FIELDS = ["createdAt", "updatedAt"];
+const POSITIVE_INT = /^[1-9]\d*$/;
+
 async function list(req, res) {
+  const {
+    page = "1",
+    limit = "10",
+    sortBy = "createdAt",
+    order = "desc",
+    location,
+    search,
+    from,
+    to,
+  } = req.query;
+
+  if (!POSITIVE_INT.test(page) || !POSITIVE_INT.test(limit)) {
+    return res
+      .status(400)
+      .json({ error: "page and limit must be positive integers" });
+  }
+
+  if (!POST_SORT_FIELDS.includes(sortBy)) {
+    return res.status(400).json({
+      error: `sortBy must be one of: ${POST_SORT_FIELDS.join(", ")}`,
+    });
+  }
+
+  if (order !== "asc" && order !== "desc") {
+    return res.status(400).json({ error: "order must be asc or desc" });
+  }
+
+  const fromDate = from === undefined ? undefined : new Date(from);
+  const toDate = to === undefined ? undefined : new Date(to);
+
+  if (
+    (fromDate && Number.isNaN(fromDate.getTime())) ||
+    (toDate && Number.isNaN(toDate.getTime()))
+  ) {
+    return res.status(400).json({ error: "from and to must be valid dates" });
+  }
+
   try {
-    const posts = await listPosts();
-    res.status(200).json(posts);
+    const result = await listPosts({
+      page: Number(page),
+      limit: Math.min(Number(limit), 50),
+      sortBy,
+      order,
+      location,
+      search,
+      from: fromDate,
+      to: toDate,
+    });
+    res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ error: "Something went wrong" });
   }
