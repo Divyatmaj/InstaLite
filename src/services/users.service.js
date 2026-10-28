@@ -1,14 +1,30 @@
 const prisma = require("../db");
+const { paginationMeta } = require("../utils/pagination");
+
+// The only user fields shown when a user is nested inside another object
+const userSummary = { select: { id: true, username: true, fullname: true } };
 
 async function createUser(data) {
   return prisma.user.create({ data });
 }
 
-async function listUsers({ page, limit, sortBy, order, isPrivate, search }) {
+async function listUsers({
+  page,
+  limit,
+  sortBy,
+  order,
+  isPrivate,
+  search,
+  hasPosts,
+}) {
   const where = {};
 
   if (isPrivate !== undefined) {
     where.isPrivate = isPrivate;
+  }
+
+  if (hasPosts !== undefined) {
+    where.posts = hasPosts ? { some: {} } : { none: {} };
   }
 
   if (search) {
@@ -28,14 +44,14 @@ async function listUsers({ page, limit, sortBy, order, isPrivate, search }) {
     prisma.user.count({ where }),
   ]);
 
-  return {
-    data: users,
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
-  };
+  return { data: users, meta: paginationMeta(page, limit, total) };
 }
 
 async function getUserById(id) {
-  return prisma.user.findUnique({ where: { id } });
+  return prisma.user.findUnique({
+    where: { id },
+    include: { _count: { select: { posts: true, likes: true } } },
+  });
 }
 
 async function updateUser(id, data) {
@@ -47,6 +63,7 @@ async function deleteUser(id) {
 }
 
 module.exports = {
+  userSummary,
   createUser,
   listUsers,
   getUserById,

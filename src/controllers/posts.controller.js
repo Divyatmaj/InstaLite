@@ -5,30 +5,37 @@ const {
   updatePost,
   deletePost,
 } = require("../services/posts.service");
+const { parsePagination } = require("../utils/pagination");
 
-// P2025: record not found
+const POST_SORT_FIELDS = ["createdAt", "updatedAt", "likes"];
+
+// P2003: foreign key constraint failed, P2025: record not found
 async function create(req, res) {
-  const { imageUrl, caption, location } = req.body || {};
+  const { imageUrl, authorId, caption, location } = req.body || {};
 
-  if (!imageUrl) {
-    return res.status(400).json({ error: "imageUrl is required" });
+  if (!imageUrl || authorId === undefined || authorId === null) {
+    return res
+      .status(400)
+      .json({ error: "imageUrl and authorId are required" });
+  }
+
+  if (!Number.isInteger(authorId)) {
+    return res.status(404).json({ error: "User not found" });
   }
 
   try {
-    const post = await createPost({ imageUrl, caption, location });
+    const post = await createPost({ imageUrl, authorId, caption, location });
     res.status(201).json(post);
   } catch (err) {
+    if (err.code === "P2003") {
+      return res.status(404).json({ error: "User not found" });
+    }
     res.status(500).json({ error: "Something went wrong" });
   }
 }
 
-const POST_SORT_FIELDS = ["createdAt", "updatedAt"];
-const POSITIVE_INT = /^[1-9]\d*$/;
-
 async function list(req, res) {
   const {
-    page = "1",
-    limit = "10",
     sortBy = "createdAt",
     order = "desc",
     location,
@@ -37,10 +44,9 @@ async function list(req, res) {
     to,
   } = req.query;
 
-  if (!POSITIVE_INT.test(page) || !POSITIVE_INT.test(limit)) {
-    return res
-      .status(400)
-      .json({ error: "page and limit must be positive integers" });
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
   }
 
   if (!POST_SORT_FIELDS.includes(sortBy)) {
@@ -65,8 +71,8 @@ async function list(req, res) {
 
   try {
     const result = await listPosts({
-      page: Number(page),
-      limit: Math.min(Number(limit), 50),
+      page: pagination.page,
+      limit: pagination.limit,
       sortBy,
       order,
       location,

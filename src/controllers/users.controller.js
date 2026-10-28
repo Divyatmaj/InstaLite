@@ -5,6 +5,13 @@ const {
   updateUser,
   deleteUser,
 } = require("../services/users.service");
+const {
+  listPostsByAuthor,
+  listPostsLikedBy,
+} = require("../services/posts.service");
+const { parsePagination } = require("../utils/pagination");
+
+const USER_SORT_FIELDS = ["createdAt", "username", "fullname"];
 
 // P2002: unique constraint failed, P2025: record not found
 async function create(req, res) {
@@ -27,23 +34,18 @@ async function create(req, res) {
   }
 }
 
-const USER_SORT_FIELDS = ["createdAt", "username", "fullname"];
-const POSITIVE_INT = /^[1-9]\d*$/;
-
 async function list(req, res) {
   const {
-    page = "1",
-    limit = "10",
     sortBy = "createdAt",
     order = "desc",
     isPrivate,
     search,
+    hasPosts,
   } = req.query;
 
-  if (!POSITIVE_INT.test(page) || !POSITIVE_INT.test(limit)) {
-    return res
-      .status(400)
-      .json({ error: "page and limit must be positive integers" });
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
   }
 
   if (!USER_SORT_FIELDS.includes(sortBy)) {
@@ -60,14 +62,19 @@ async function list(req, res) {
     return res.status(400).json({ error: "isPrivate must be true or false" });
   }
 
+  if (hasPosts !== undefined && hasPosts !== "true" && hasPosts !== "false") {
+    return res.status(400).json({ error: "hasPosts must be true or false" });
+  }
+
   try {
     const result = await listUsers({
-      page: Number(page),
-      limit: Math.min(Number(limit), 50),
+      page: pagination.page,
+      limit: pagination.limit,
       sortBy,
       order,
       isPrivate: isPrivate === undefined ? undefined : isPrivate === "true",
       search,
+      hasPosts: hasPosts === undefined ? undefined : hasPosts === "true",
     });
     res.status(200).json(result);
   } catch (err) {
@@ -132,4 +139,48 @@ async function remove(req, res) {
   }
 }
 
-module.exports = { create, list, getOne, update, remove };
+async function posts(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+
+  try {
+    const result = await listPostsByAuthor(id, pagination);
+    if (!result) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+}
+
+async function likedPosts(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+
+  try {
+    const result = await listPostsLikedBy(id, pagination);
+    if (!result) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+}
+
+module.exports = { create, list, getOne, update, remove, posts, likedPosts };
