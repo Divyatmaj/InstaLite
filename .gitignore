@@ -1,0 +1,19 @@
+/lab-13/solution.md
+
+# dependencies
+node_modules/
+
+# environment variables
+.env
+.env.*
+!.env.example
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor files
+.DS_Store
+.vscode/
+.idea/
